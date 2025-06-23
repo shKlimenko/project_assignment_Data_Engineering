@@ -2,7 +2,6 @@ import psycopg2
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 
 load_dotenv()
 
@@ -14,7 +13,7 @@ DB_PARAMS = {
     "port": os.getenv("DB_PORT")
 }
 
-CSV_FILE = os.path.join('..', 'data', 'ft_balance_f.csv')
+CSV_FILE = 'data/ft_balance_f.csv'
 
 def create_table(conn):
     create_table_sql = """
@@ -36,10 +35,8 @@ def load_data_from_csv(conn, csv_file):
     # Преобразование даты из формата DD.MM.YYYY в YYYY-MM-DD
     df['ON_DATE'] = pd.to_datetime(df['ON_DATE'], format='%d.%m.%Y').dt.strftime('%Y-%m-%d')
     
-    # Подготовка данных для вставки
     data = [tuple(x) for x in df.to_numpy()]
     
-    # SQL для вставки данных (с обработкой конфликтов при дублировании)
     insert_sql = """
     INSERT INTO FT_BALANCE_F (on_date, account_rk, currency_rk, balance_out)
     VALUES (%s, %s, %s, %s)
@@ -56,13 +53,10 @@ def load_data_from_csv(conn, csv_file):
 
 def main():
     try:
-        # Установка соединения с базой данных
         conn = psycopg2.connect(**DB_PARAMS)
         
-        # Создание таблицы
         create_table(conn)
         
-        # Загрузка данных из CSV
         load_data_from_csv(conn, CSV_FILE)
         
     except Exception as e:
