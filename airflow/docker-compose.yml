@@ -5,7 +5,7 @@ services:
     image: apache/airflow:2.7.3
     user: "0:0"  # Запуск от root для избежания проблем с правами
     environment:
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflowuser:airflowpass@185.105.109.251:5432/airflow
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://<user>:<password>@<ip>:5432/<database>
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
       - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
@@ -19,7 +19,7 @@ services:
       bash -c "
       chown -R airflow:root /opt/airflow/logs &&
       airflow db init &&
-      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+      airflow users create --username username --password password --firstname User --lastname User --role USer --email user@example.com &&
       airflow webserver
       "
     healthcheck:
@@ -34,7 +34,7 @@ services:
     depends_on:
       - airflow-webserver
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflowuser:airflowpass@185.105.109.251:5432/airflow
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://<user>:<password>@<ip>:5432/<database>
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
