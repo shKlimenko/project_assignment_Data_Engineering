@@ -6,24 +6,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DB_PARAMS = {
-    "database": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
+    "database": os.getenv("DB_NAME2"),
+    "user": os.getenv("DB_USER2"),
+    "password": os.getenv("DB_PASSWORD2"),
+    "host": os.getenv("DB_HOST2"),
+    "port": os.getenv("DB_PORT2")
 }
 
-CSV_FILE = 'data/md_currency_d.csv'
+CSV_FILE = 'data/md_exchange_rate_d.csv'
 
 def create_table(conn):
     create_table_sql = """
-    CREATE TABLE IF NOT EXISTS MD_CURRENCY_D (
-        currency_rk NUMERIC NOT NULL,
+    CREATE TABLE IF NOT EXISTS MD_EXCHANGE_RATE_D (
         data_actual_date DATE NOT NULL,
         data_actual_end_date DATE,
-        currency_code VARCHAR(3),
-        code_iso_char VARCHAR(3),
-        UNIQUE (currency_rk, data_actual_date)
+        currency_rk NUMERIC NOT NULL,
+        reduced_cource FLOAT,
+        code_iso_num VARCHAR(3),
+        UNIQUE (data_actual_date, currency_rk)
     );
     """
     with conn.cursor() as cursor:
@@ -31,19 +31,19 @@ def create_table(conn):
     conn.commit()
 
 def load_data_from_csv(conn, csv_file):
-    with open(csv_file, 'r', encoding='cp1252') as f:
-        df = pd.read_csv(f, sep=';')
+    df = pd.read_csv(csv_file, sep=';')
     
     data = [tuple(x) for x in df.to_numpy()]
     
     insert_sql = """
-    INSERT INTO MD_CURRENCY_D (currency_rk, data_actual_date, data_actual_end_date, currency_code, code_iso_char)
+    INSERT INTO MD_EXCHANGE_RATE_D (data_actual_date, data_actual_end_date, 
+                            currency_rk, reduced_cource, code_iso_num)
     VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT (currency_rk, data_actual_date) 
+    ON CONFLICT (data_actual_date, currency_rk) 
     DO UPDATE SET 
         data_actual_end_date = EXCLUDED.data_actual_end_date,
-        currency_code = EXCLUDED.currency_code,
-        code_iso_char = EXCLUDED.code_iso_char;
+        reduced_cource = EXCLUDED.reduced_cource,
+        code_iso_num = EXCLUDED.code_iso_num;
     """
     
     with conn.cursor() as cursor:

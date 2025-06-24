@@ -13,17 +13,17 @@ DB_PARAMS = {
     "port": os.getenv("DB_PORT")
 }
 
-CSV_FILE = 'data/md_currency_d.csv'
+CSV_FILE = 'data/md_exchange_rate_d.csv'
 
 def create_table(conn):
     create_table_sql = """
-    CREATE TABLE IF NOT EXISTS MD_CURRENCY_D (
-        currency_rk NUMERIC NOT NULL,
+    CREATE TABLE IF NOT EXISTS MD_EXCHANGE_RATE_D (
         data_actual_date DATE NOT NULL,
         data_actual_end_date DATE,
-        currency_code VARCHAR(3),
-        code_iso_char VARCHAR(3),
-        UNIQUE (currency_rk, data_actual_date)
+        currency_rk NUMERIC NOT NULL,
+        reduced_cource FLOAT,
+        code_iso_num VARCHAR(3),
+        UNIQUE (data_actual_date, currency_rk)
     );
     """
     with conn.cursor() as cursor:
@@ -31,26 +31,14 @@ def create_table(conn):
     conn.commit()
 
 def load_data_from_csv(conn, csv_file):
-    #with open(csv_file, 'r', encoding='cp1252') as f:
-    df = pd.read_csv(csv_file, sep=';', dtype={
-                                        'CURRENCY_RK': 'int64',
-                                        'DATA_ACTUAL_DATE': 'str',
-                                        'DATA_ACTUAL_END_DATE': 'str',
-                                        'CURRENCY_CODE': 'str',  
-                                        'CODE_ISO_CHAR': 'str' 
-                                        }
-                    )
-
+    df = pd.read_csv(csv_file, sep=';')
+    
     data = [tuple(x) for x in df.to_numpy()]
     
     insert_sql = """
-    INSERT INTO MD_CURRENCY_D (currency_rk, data_actual_date, data_actual_end_date, currency_code, code_iso_char)
-    VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT (currency_rk, data_actual_date) 
-    DO UPDATE SET 
-        data_actual_end_date = EXCLUDED.data_actual_end_date,
-        currency_code = EXCLUDED.currency_code,
-        code_iso_char = EXCLUDED.code_iso_char;
+    INSERT INTO MD_EXCHANGE_RATE_D (data_actual_date, data_actual_end_date, 
+                            currency_rk, reduced_cource, code_iso_num)
+    VALUES (%s, %s, %s, %s, %s);
     """
     
     with conn.cursor() as cursor:
