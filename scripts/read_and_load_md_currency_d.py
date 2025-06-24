@@ -31,7 +31,6 @@ def create_table(conn):
     conn.commit()
 
 def load_data_from_csv(conn, csv_file):
-    #with open(csv_file, 'r', encoding='cp1252') as f:
     df = pd.read_csv(csv_file, sep=';', dtype={
                                         'CURRENCY_RK': 'int64',
                                         'DATA_ACTUAL_DATE': 'str',

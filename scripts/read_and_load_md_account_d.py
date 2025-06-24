@@ -2,6 +2,8 @@ import psycopg2
 import pandas as pd
 import os
 from dotenv import load_dotenv
+from log_to_db import *
+from datetime import datetime
 
 load_dotenv()
 
@@ -32,44 +34,72 @@ def create_table(conn):
         cursor.execute(create_table_sql)
     conn.commit()
 
-def load_data_from_csv(conn, csv_file):
-    df = pd.read_csv(csv_file, sep=';')
-    
-    data = [tuple(x) for x in df.to_numpy()]
-    
-    insert_sql = """
-    INSERT INTO MD_ACCOUNT_D (data_actual_date, data_actual_end_date, 
-                            account_rk, account_number, char_type,
-                            currency_rk, currency_code)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT (data_actual_date, account_rk) 
-    DO UPDATE SET 
-        data_actual_end_date = EXCLUDED.data_actual_end_date,
-        account_number = EXCLUDED.account_number,
-        char_type = EXCLUDED.char_type,
-        currency_rk = EXCLUDED.currency_rk,
-        currency_code = EXCLUDED.currency_code;
-    """
-    
-    with conn.cursor() as cursor:
-        cursor.executemany(insert_sql, data)
-    conn.commit()
-    print(f"Загружено {len(data)} записей")
+def load_data_from_csv(conn, logs_conn, csv_file):
+    """Загружает данные из CSV в основную таблицу"""
+    start_time = datetime.now()
+    record_count = 0
+    status = "SUCCESS"
+    error_message = None
+
+
+    try:
+        df = pd.read_csv(csv_file, sep=';')
+        data = [tuple(x) for x in df.to_numpy()]
+        record_count = len(data)
+        
+        insert_sql = """
+        INSERT INTO MD_ACCOUNT_D 
+            (data_actual_date, data_actual_end_date, account_rk, 
+             account_number, char_type, currency_rk, currency_code)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (data_actual_date, account_rk) 
+        DO UPDATE SET 
+            data_actual_end_date = EXCLUDED.data_actual_end_date,
+            account_number = EXCLUDED.account_number,
+            char_type = EXCLUDED.char_type,
+            currency_rk = EXCLUDED.currency_rk,
+            currency_code = EXCLUDED.currency_code;
+        """
+        
+        with conn.cursor() as cursor:
+            cursor.executemany(insert_sql, data)
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        status = "FAILED"
+        error_message = str(e)
+        raise
+    finally:
+        end_time = datetime.now()
+        log_operation(
+                logs_conn, 
+                start_time.strftime('%Y-%m-%d %H:%M:%S'), 
+                end_time.strftime('%Y-%m-%d %H:%M:%S'), 
+                status, 
+                error_message, 
+                os.path.basename(csv_file), 
+                record_count)
+        
+    print(f"Загружено {record_count} записей")
 
 def main():
     try:
         conn = psycopg2.connect(**DB_PARAMS)
+        logs_conn = psycopg2.connect(**LOGS_DB_PARAMS)
         
         create_table(conn)
         
-        load_data_from_csv(conn, CSV_FILE)
+        load_data_from_csv(conn, logs_conn, CSV_FILE)
         
     except Exception as e:
         print(f"Ошибка: {e}")
     finally:
         if conn:
             conn.close()
-            print("Соединение с PostgreSQL закрыто")
+        if logs_conn:
+            logs_conn.close()
+        print("Соединения с PostgreSQL закрыты")
 
 if __name__ == "__main__":
     main()

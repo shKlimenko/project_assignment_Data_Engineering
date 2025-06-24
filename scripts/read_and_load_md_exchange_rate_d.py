@@ -38,7 +38,12 @@ def load_data_from_csv(conn, csv_file):
     insert_sql = """
     INSERT INTO MD_EXCHANGE_RATE_D (data_actual_date, data_actual_end_date, 
                             currency_rk, reduced_cource, code_iso_num)
-    VALUES (%s, %s, %s, %s, %s);
+    VALUES (%s, %s, %s, %s, %s)
+    ON CONFLICT (data_actual_date, currency_rk) 
+    DO UPDATE SET 
+        data_actual_end_date = EXCLUDED.data_actual_end_date,
+        reduced_cource = EXCLUDED.reduced_cource,
+        code_iso_num = EXCLUDED.code_iso_num;
     """
     
     with conn.cursor() as cursor:
