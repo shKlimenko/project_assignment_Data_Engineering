@@ -4,8 +4,9 @@ import os
 from log_to_db import log_operation
 from datetime import datetime
 from db_parameters import DB_PARAMS, LOGS_DB_PARAMS
+import time
 
-CSV_FILE = 'data/ft_balance_f.csv'
+CSV_FILE = '/opt/airflow/data/ft_balance_f.csv'
 
 def create_table(conn):
     create_table_sql = """
@@ -27,6 +28,8 @@ def load_data_from_csv(conn, logs_conn, csv_file):
     updated_count = 0  
     status = "SUCCESS"
     error_message = None
+    total_written = 0
+    time.sleep(5)
 
     try:
         df = pd.read_csv(csv_file, sep=';')
