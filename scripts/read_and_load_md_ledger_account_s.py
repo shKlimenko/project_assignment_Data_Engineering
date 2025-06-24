@@ -1,17 +1,9 @@
 import psycopg2
 import pandas as pd
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_PARAMS = {
-    "database": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
+from log_to_db import log_operation
+from datetime import datetime
+from db_parameters import DB_PARAMS, LOGS_DB_PARAMS
 
 CSV_FILE = 'data/md_ledger_account_s.csv'
 
@@ -53,65 +45,99 @@ def create_table(conn):
         cursor.execute(create_table_sql)
     conn.commit()
 
-def load_data_from_csv(conn, csv_file):
-    df = pd.read_csv(csv_file, sep=';', dtype={
-                                            'CHAPTER': 'str',               # CHAR(1)
-                                            'CHAPTER_NAME': 'str',          # VARCHAR(16)
-                                            'SECTION_NUMBER': 'Int64',      # INTEGER (поддержка NULL)
-                                            'SECTION_NAME': 'str',          # VARCHAR(22)
-                                            'SUBSECTION_NAME': 'str',       # VARCHAR(21)
-                                            'LEDGER1_ACCOUNT': 'Int64',     # INTEGER
-                                            'LEDGER1_ACCOUNT_NAME': 'str',  # VARCHAR(47)
-                                            'LEDGER_ACCOUNT': 'Int64',      # INTEGER NOT NULL
-                                            'LEDGER_ACCOUNT_NAME': 'str',   # VARCHAR(153)
-                                            'CHARACTERISTIC': 'str',        # CHAR(1)
-                                            'START_DATE': 'str',            # DATE (преобразуем позже)
-                                            'END_DATE': 'str'               # DATE (преобразуем позже)
-                                        })
-    df['START_DATE'] = pd.to_datetime(df['START_DATE']).dt.date
-    df['END_DATE'] = pd.to_datetime(df['END_DATE']).dt.date
+def load_data_from_csv(conn, logs_conn, csv_file):
+    start_time = datetime.now()
+    inserted_count = 0  
+    updated_count = 0  
+    status = "SUCCESS"
+    error_message = None
 
-    data = [tuple(x) for x in df.to_numpy()]
+    try:
+        df = pd.read_csv(csv_file, sep=';', dtype={
+                                            'CHAPTER': 'str',
+                                            'CHAPTER_NAME': 'str',
+                                            'SECTION_NUMBER': 'Int64',
+                                            'SECTION_NAME': 'str',
+                                            'SUBSECTION_NAME': 'str',
+                                            'LEDGER1_ACCOUNT': 'Int64',
+                                            'LEDGER1_ACCOUNT_NAME': 'str',
+                                            'LEDGER_ACCOUNT': 'Int64',
+                                            'LEDGER_ACCOUNT_NAME': 'str',
+                                            'CHARACTERISTIC': 'str',
+                                            'START_DATE': 'str',
+                                            'END_DATE': 'str'
+                                        })
+        df['START_DATE'] = pd.to_datetime(df['START_DATE']).dt.date
+        df['END_DATE'] = pd.to_datetime(df['END_DATE']).dt.date
+
+        data = [tuple(x) for x in df.to_numpy()]
     
-    insert_sql = """
-    INSERT INTO MD_LEDGER_ACCOUNT_S (chapter, chapter_name, section_number, section_name ,
-                                subsection_name, ledger1_account, ledger1_account_name , 
-                                ledger_account, ledger_account_name, characteristic,
-                                start_date, end_date)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT (ledger_account, start_date) 
-    DO UPDATE SET 
-        chapter = EXCLUDED.chapter,
-        chapter_name = EXCLUDED.chapter_name,
-        section_number = EXCLUDED.section_number,
-        section_name = EXCLUDED.section_name,
-        subsection_name = EXCLUDED.subsection_name,
-        ledger1_account = EXCLUDED.ledger1_account,
-        ledger1_account_name = EXCLUDED.ledger1_account_name,
-        ledger_account_name = EXCLUDED.ledger_account_name,
-        characteristic = EXCLUDED.characteristic,
-        end_date = EXCLUDED.end_date;
-    """
-    
-    with conn.cursor() as cursor:
-        cursor.executemany(insert_sql, data)
-    conn.commit()
-    print(f"Загружено {len(data)} записей")
+        insert_sql = """
+        INSERT INTO MD_LEDGER_ACCOUNT_S (chapter, chapter_name, section_number, section_name ,
+                                    subsection_name, ledger1_account, ledger1_account_name , 
+                                    ledger_account, ledger_account_name, characteristic,
+                                    start_date, end_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (ledger_account, start_date) 
+        DO UPDATE SET 
+            chapter = EXCLUDED.chapter,
+            chapter_name = EXCLUDED.chapter_name,
+            section_number = EXCLUDED.section_number,
+            section_name = EXCLUDED.section_name,
+            subsection_name = EXCLUDED.subsection_name,
+            ledger1_account = EXCLUDED.ledger1_account,
+            ledger1_account_name = EXCLUDED.ledger1_account_name,
+            ledger_account_name = EXCLUDED.ledger_account_name,
+            characteristic = EXCLUDED.characteristic,
+            end_date = EXCLUDED.end_date
+        RETURNING (xmax = 0) AS inserted;
+        """
+        with conn.cursor() as cursor:
+            for row in data:
+                cursor.execute(insert_sql, row)
+                result = cursor.fetchone()
+                if result[0]:
+                    inserted_count += 1
+                else:
+                    updated_count += 1
+        conn.commit()
+        total_written = inserted_count + updated_count
+        
+    except Exception as e:
+        conn.rollback()
+        status = "FAILED"
+        error_message = str(e)
+        raise
+    finally:
+        end_time = datetime.now()
+        log_operation(
+                logs_conn, 
+                start_time.strftime('%Y-%m-%d %H:%M:%S'), 
+                end_time.strftime('%Y-%m-%d %H:%M:%S'), 
+                status, 
+                error_message, 
+                os.path.basename(csv_file), 
+                total_written)
+        
+    print(f"Обработано записей: {total_written} (вставлено: {inserted_count}, обновлено: {updated_count})")
 
 def main():
     try:
         conn = psycopg2.connect(**DB_PARAMS)
+        logs_conn = psycopg2.connect(**LOGS_DB_PARAMS)
         
         create_table(conn)
         
-        load_data_from_csv(conn, CSV_FILE)
+        load_data_from_csv(conn, logs_conn, CSV_FILE)
         
     except Exception as e:
         print(f"Ошибка: {e}")
     finally:
         if conn:
             conn.close()
-            print("Соединение с PostgreSQL закрыто")
+        if logs_conn:
+            logs_conn.close()
+        print("Соединения с PostgreSQL закрыты")
 
 if __name__ == "__main__":
     main()

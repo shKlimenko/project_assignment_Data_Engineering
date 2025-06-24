@@ -1,19 +1,10 @@
 import psycopg2
 import pandas as pd
 import os
-from dotenv import load_dotenv
-from log_to_db import *
+from log_to_db import log_operation
 from datetime import datetime
+from db_parameters import DB_PARAMS, LOGS_DB_PARAMS
 
-load_dotenv()
-
-DB_PARAMS = {
-    "database": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
 
 CSV_FILE = 'data/md_account_d.csv'
 
@@ -35,17 +26,15 @@ def create_table(conn):
     conn.commit()
 
 def load_data_from_csv(conn, logs_conn, csv_file):
-    """Загружает данные из CSV в основную таблицу"""
     start_time = datetime.now()
-    record_count = 0
+    inserted_count = 0  
+    updated_count = 0  
     status = "SUCCESS"
     error_message = None
-
 
     try:
         df = pd.read_csv(csv_file, sep=';')
         data = [tuple(x) for x in df.to_numpy()]
-        record_count = len(data)
         
         insert_sql = """
         INSERT INTO MD_ACCOUNT_D 
@@ -58,12 +47,20 @@ def load_data_from_csv(conn, logs_conn, csv_file):
             account_number = EXCLUDED.account_number,
             char_type = EXCLUDED.char_type,
             currency_rk = EXCLUDED.currency_rk,
-            currency_code = EXCLUDED.currency_code;
+            currency_code = EXCLUDED.currency_code
+        RETURNING (xmax = 0) AS inserted;
         """
         
         with conn.cursor() as cursor:
-            cursor.executemany(insert_sql, data)
+            for row in data:
+                cursor.execute(insert_sql, row)
+                result = cursor.fetchone()
+                if result[0]:
+                    inserted_count += 1
+                else:
+                    updated_count += 1
         conn.commit()
+        total_written = inserted_count + updated_count
         
     except Exception as e:
         conn.rollback()
@@ -79,9 +76,9 @@ def load_data_from_csv(conn, logs_conn, csv_file):
                 status, 
                 error_message, 
                 os.path.basename(csv_file), 
-                record_count)
+                total_written)
         
-    print(f"Загружено {record_count} записей")
+    print(f"Обработано записей: {total_written} (вставлено: {inserted_count}, обновлено: {updated_count})")
 
 def main():
     try:
