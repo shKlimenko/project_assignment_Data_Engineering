@@ -1,17 +1,3 @@
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-LOGS_DB_PARAMS = {
-    "database": os.getenv("LOGS_DB_NAME"),
-    "user": os.getenv("LOGS_DB_USER"),
-    "password": os.getenv("LOGS_DB_PASSWORD"),
-    "host": os.getenv("LOGS_DB_HOST"),
-    "port": os.getenv("LOGS_DB_PORT")
-}
-
-
 def create_table_if_not_exists(conn):
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS data_load_log (
