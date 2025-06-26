@@ -2,7 +2,7 @@ import psycopg2
 import pandas as pd
 import os
 from log_to_db import log_operation
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from db_parameters import DB_PARAMS, LOGS_DB_PARAMS
 import time
 
@@ -24,7 +24,7 @@ def create_table(conn):
     conn.commit()
 
 def load_data_from_csv(conn, logs_conn, csv_file):
-    start_time = datetime.now()
+    start_time = datetime.now(timezone(timedelta(hours=3)))
     inserted_count = 0  
     updated_count = 0  
     status = "SUCCESS"
@@ -64,7 +64,7 @@ def load_data_from_csv(conn, logs_conn, csv_file):
         error_message = str(e)
         raise
     finally:
-        end_time = datetime.now()
+        end_time = datetime.now(timezone(timedelta(hours=3)))
         log_operation(
                 logs_conn, 
                 start_time.strftime('%Y-%m-%d %H:%M:%S'), 
