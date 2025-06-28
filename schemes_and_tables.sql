@@ -7,6 +7,8 @@ CREATE SCHEMA IF NOT EXISTS LOGS;
 CREATE USER logs WITH PASSWORD 'logspass';
 GRANT ALL ON SCHEMA LOGS TO logs;
 
+CREATE SCHEMA IF NOT EXISTS DM;
+GRANT ALL ON SCHEMA DM TO ds;
 
 -- База данных для Airflow --
 CREATE DATABASE airflow;
@@ -102,4 +104,14 @@ CREATE TABLE IF NOT EXISTS logs.data_load_log (
     file_name VARCHAR(255) NOT NULL,
     record_count INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Создание таблицы витрины данных
+CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_TURNOVER_F (
+	on_date DATE,
+	account_rk NUMERIC,
+	credit_amount NUMERIC(23, 8),
+	credit_amount_rub NUMERIC(23, 8),
+	debet_amount NUMERIC(23, 8),
+	debet_amount_rub NUMERIC(23, 8)
 );
