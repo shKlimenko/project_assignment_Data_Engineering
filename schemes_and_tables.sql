@@ -107,6 +107,17 @@ CREATE TABLE IF NOT EXISTS logs.data_load_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Создание таблицы логгирования процедуры заполнения витрины оборотов
+CREATE TABLE IF NOT EXISTS logs.proc_log (
+    log_id      BIGSERIAL PRIMARY KEY,
+    proc_name   TEXT NOT NULL,
+    on_date     DATE,
+    start_time  TIMESTAMP NOT NULL,
+    end_time    TIMESTAMP,
+    duration    INTERVAL GENERATED ALWAYS AS (end_time - start_time) STORED,
+	row_count INT
+);
+
 -- Создание таблицы витрины данных
 CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_TURNOVER_F (
 	on_date DATE,
@@ -115,4 +126,12 @@ CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_TURNOVER_F (
 	credit_amount_rub NUMERIC(23, 8),
 	debet_amount NUMERIC(23, 8),
 	debet_amount_rub NUMERIC(23, 8)
+);
+
+-- Создание таблицы витрины остатков
+CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_BALANCE_F (
+	on_date DATE NOT NULL,
+	account_rk NUMERIC NOT NULL,
+	currency_rk NUMERIC,
+	balance_out_rub FLOAT
 );

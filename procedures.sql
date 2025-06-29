@@ -1,21 +1,21 @@
+-- процедура с логгированием
 CREATE OR REPLACE PROCEDURE ds.fill_account_turnover_f(i_OnDate DATE)
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    v_proc_name TEXT := 'ds.fill_account_turnover_f';
+    v_start_time TIMESTAMP;
+    v_end_time   TIMESTAMP;
+    v_rows_affected INT := 0;
 BEGIN
-    -- Очищаем витрину для указанной даты, если данные уже существовали
+    -- Фиксируем время начала
+    v_start_time := clock_timestamp();
+   
+    -- Очищаем витрину для указанной даты
     DELETE FROM DM.DM_ACCOUNT_TURNOVER_F WHERE on_date = i_OnDate;
-    
+
     -- Вставляем новые данные
-    INSERT INTO DM.DM_ACCOUNT_TURNOVER_F (
-        on_date,
-        account_rk,
-        credit_amount,
-        credit_amount_rub,
-        debet_amount,
-        debet_amount_rub
-    )
     WITH 
-        -- Суммы по кредиту счетов
         credit_turnover AS (
             SELECT 
                 credit_account_rk AS account_rk,
@@ -24,8 +24,6 @@ BEGIN
             WHERE oper_date = i_OnDate
             GROUP BY credit_account_rk
         ),
-        
-        -- Суммы по дебету счетов
         debet_turnover AS (
             SELECT 
                 debet_account_rk AS account_rk,
@@ -34,8 +32,6 @@ BEGIN
             WHERE oper_date = i_OnDate
             GROUP BY debet_account_rk
         ),
-        
-        -- Курсы валют на указанную дату
         currency_rates AS (
             SELECT 
                 currency_rk,
@@ -43,15 +39,22 @@ BEGIN
             FROM ds.MD_EXCHANGE_RATE_D
             WHERE data_actual_date <= i_OnDate 
               AND (data_actual_end_date IS NULL OR data_actual_end_date > i_OnDate)
-        ) -- Закрывающая скобка добавлена здесь
-        
+        )
+    INSERT INTO DM.DM_ACCOUNT_TURNOVER_F (
+        on_date,
+        account_rk,
+        credit_amount,
+        credit_amount_rub,
+        debet_amount,
+        debet_amount_rub
+    )
     SELECT 
         i_OnDate AS on_date,
         acc.account_rk,
-        COALESCE(ct.credit_amount, 0) AS credit_amount,
-        COALESCE(ct.credit_amount, 0) * COALESCE(cr.rate, 1) AS credit_amount_rub,
-        COALESCE(dt.debet_amount, 0) AS debet_amount,
-        COALESCE(dt.debet_amount, 0) * COALESCE(cr.rate, 1) AS debet_amount_rub
+        COALESCE(ct.credit_amount, 0),
+        COALESCE(ct.credit_amount, 0) * COALESCE(cr.rate, 1),
+        COALESCE(dt.debet_amount, 0),
+        COALESCE(dt.debet_amount, 0) * COALESCE(cr.rate, 1)
     FROM 
         (SELECT DISTINCT account_rk FROM ds.MD_ACCOUNT_D) acc
     LEFT JOIN credit_turnover ct ON acc.account_rk = ct.account_rk
@@ -61,13 +64,29 @@ BEGIN
         AND (a.data_actual_end_date IS NULL OR a.data_actual_end_date > i_OnDate)
     LEFT JOIN currency_rates cr ON a.currency_rk = cr.currency_rk
     WHERE (ct.credit_amount IS NOT NULL OR dt.debet_amount IS NOT NULL);
-    
+
+    -- Получаем количество вставленных строк
+    GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+
+    -- Фиксируем время завершения
+    v_end_time := clock_timestamp();
+
+
+    -- Логируем только если были вставлены данные
+    IF v_rows_affected > 0 THEN
+        INSERT INTO logs.proc_log (proc_name, on_date, start_time, end_time, row_count)
+    VALUES (v_proc_name, i_OnDate, v_start_time, v_end_time, v_rows_affected);
+    ELSE
+        RAISE NOTICE 'Нет данных для даты %', i_OnDate;
+    END IF;
+
 END;
 $$;
 
 -- Проверяем
 CALL ds.fill_account_turnover_f('2018-01-18');
 
+-- процедура с периодом
 CREATE OR REPLACE PROCEDURE ds.fill_account_turnover_period(start_date DATE, end_date DATE)
 LANGUAGE plpgsql
 AS $$
@@ -83,4 +102,5 @@ BEGIN
 END;
 $$;
 
+-- Проверяем
 CALL ds.fill_account_turnover_period('2018-01-01', '2018-01-31');
