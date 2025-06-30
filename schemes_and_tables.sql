@@ -133,5 +133,6 @@ CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_BALANCE_F (
 	on_date DATE NOT NULL,
 	account_rk NUMERIC NOT NULL,
 	currency_rk NUMERIC,
+	balance_out FLOAT,
 	balance_out_rub FLOAT
 );
