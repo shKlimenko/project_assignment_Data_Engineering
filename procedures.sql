@@ -1,4 +1,6 @@
--- процедура с логгированием
+-- Проектное задание 1.2
+
+-- процедура заполнения витрины 'Обороты по лицевым счетам' за один день (с логгированием)
 CREATE OR REPLACE PROCEDURE ds.fill_account_turnover_f(i_OnDate DATE)
 LANGUAGE plpgsql
 AS $$
@@ -8,13 +10,10 @@ DECLARE
     v_end_time   TIMESTAMP;
     v_rows_affected INT := 0;
 BEGIN
-    -- Фиксируем время начала
     v_start_time := clock_timestamp();
    
-    -- Очищаем витрину для указанной даты
     DELETE FROM DM.DM_ACCOUNT_TURNOVER_F WHERE on_date = i_OnDate;
 
-    -- Вставляем новые данные
     WITH 
         credit_turnover AS (
             SELECT 
@@ -63,16 +62,12 @@ BEGIN
         AND a.data_actual_date <= i_OnDate 
         AND (a.data_actual_end_date IS NULL OR a.data_actual_end_date > i_OnDate)
     LEFT JOIN currency_rates cr ON a.currency_rk = cr.currency_rk
-    WHERE (ct.credit_amount IS NOT NULL OR dt.debet_amount IS NOT NULL);
+    WHERE ct.credit_amount IS NOT NULL AND dt.debet_amount IS NOT NULL;
 
-    -- Получаем количество вставленных строк
     GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
 
-    -- Фиксируем время завершения
     v_end_time := clock_timestamp();
 
-
-    -- Логируем только если были вставлены данные
     IF v_rows_affected > 0 THEN
         INSERT INTO logs.proc_log (proc_name, on_date, start_time, end_time, row_count)
     VALUES (v_proc_name, i_OnDate, v_start_time, v_end_time, v_rows_affected);
@@ -83,10 +78,8 @@ BEGIN
 END;
 $$;
 
--- Проверяем
-CALL ds.fill_account_turnover_f('2018-01-18');
 
--- процедура с периодом
+-- процедура заполнения витрины 'Обороты по лицевым счетам' за выбранный период
 CREATE OR REPLACE PROCEDURE ds.fill_account_turnover_period(start_date DATE, end_date DATE)
 LANGUAGE plpgsql
 AS $$
@@ -102,15 +95,13 @@ BEGIN
 END;
 $$;
 
--- Проверяем
-CALL ds.fill_account_turnover_period('2018-01-01', '2018-01-31');
+
+
+-----------------------------------------------------------------------------
 
 
 
-
-
-
--- процедура заполнения витрины остатков 2017-12-31
+-- процедура заполнения витрины 'Остатки по лицевым счетам' за 2017-12-31 (с логгированием) 
 CREATE OR REPLACE PROCEDURE ds.fill_account_balance_2017_12_31_f()
 LANGUAGE plpgsql
 AS $$
@@ -127,14 +118,12 @@ BEGIN
     INSERT INTO DM.DM_ACCOUNT_BALANCE_F (
         on_date,
         account_rk,
-        currency_rk,
     	balance_out,
         balance_out_rub
     )
     SELECT 
         b.on_date,
         b.account_rk,
-        b.currency_rk,
 	    b.balance_out,
         b.balance_out * COALESCE(er.reduced_cource, 1) AS balance_out_rub
     FROM ds.FT_BALANCE_F b
@@ -161,20 +150,16 @@ BEGIN
 END;
 $$;
 
--- Проверяем
-CALL ds.fill_account_balance_2017_12_31_f();
 
 
-
--- процедура заполнения витрины остатков
+-- процедура заполнения витрины 'Остатки по лицевым счетам' за один день (с логгированием)
 CREATE OR REPLACE PROCEDURE ds.fill_account_balance_f(i_OnDate DATE)
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_proc_name TEXT := 'ds.fill_account_balance2_f';
+    v_proc_name TEXT := 'ds.fill_account_balance_f';
     v_start_time TIMESTAMP;
     v_end_time   TIMESTAMP;
-    v_prev_date DATE := i_OnDate - INTERVAL '1 day';
     v_rows_affected INT := 0;
 BEGIN
     v_start_time := clock_timestamp();
@@ -184,24 +169,22 @@ BEGIN
     INSERT INTO DM.DM_ACCOUNT_BALANCE_F (
         on_date,
         account_rk,
-        currency_rk,
 		balance_out,
         balance_out_rub
     )
     SELECT 
         i_OnDate AS on_date,
         a.account_rk,
-        a.currency_rk,
         CASE 
-            WHEN a.char_type = 'А' THEN COALESCE(b.balance_out, 0) + COALESCE(t.debet_amount, 0) - COALESCE(t.credit_amount, 0)
-            WHEN a.char_type = 'П' THEN COALESCE(b.balance_out, 0) - COALESCE(t.debet_amount, 0) + COALESCE(t.credit_amount, 0)
+            WHEN a.char_type = 'А' THEN COALESCE(ldb.balance_out, 0) + COALESCE(tdb.debet_amount, 0) - COALESCE(tdb.credit_amount, 0)
+            WHEN a.char_type = 'П' THEN COALESCE(ldb.balance_out, 0) - COALESCE(tdb.debet_amount, 0) + COALESCE(tdb.credit_amount, 0)
         END AS balance_out,
         CASE 
-            WHEN a.char_type = 'А' THEN COALESCE(b.balance_out_rub, 0) + COALESCE(t.debet_amount_rub, 0) - COALESCE(t.credit_amount_rub, 0)
-            WHEN a.char_type = 'П' THEN COALESCE(b.balance_out_rub, 0) - COALESCE(t.debet_amount_rub, 0) + COALESCE(t.credit_amount_rub, 0)
+            WHEN a.char_type = 'А' THEN COALESCE(ldb.balance_out_rub, 0) + COALESCE(tdb.debet_amount_rub, 0) - COALESCE(tdb.credit_amount_rub, 0)
+            WHEN a.char_type = 'П' THEN COALESCE(ldb.balance_out_rub, 0) - COALESCE(tdb.debet_amount_rub, 0) + COALESCE(tdb.credit_amount_rub, 0)
         END AS balance_out_rub
     FROM (
-        SELECT DISTINCT account_rk, currency_rk, char_type
+        SELECT DISTINCT account_rk, char_type
         FROM ds.MD_ACCOUNT_D
         WHERE data_actual_date <= i_OnDate
           AND (data_actual_end_date IS NULL OR data_actual_end_date > i_OnDate)
@@ -210,13 +193,13 @@ BEGIN
     LEFT JOIN (
         SELECT account_rk, balance_out, balance_out_rub
         FROM DM.DM_ACCOUNT_BALANCE_F
-        WHERE on_date = v_prev_date
-    ) b ON a.account_rk = b.account_rk
+        WHERE on_date = i_OnDate - INTERVAL '1 day'
+    ) ldb ON a.account_rk = ldb.account_rk
     LEFT JOIN (
         SELECT account_rk, credit_amount, debet_amount, credit_amount_rub, debet_amount_rub
         FROM DM.DM_ACCOUNT_TURNOVER_F
         WHERE on_date = i_OnDate
-    ) t ON a.account_rk = t.account_rk;
+    ) tdb ON a.account_rk = tdb.account_rk;
 
     GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
 
@@ -233,7 +216,7 @@ END;
 $$;
 
 
--- процедура заполнения витриныостатков с периодом
+-- процедура заполнения витрины 'Остатки по лицевым счетам' за выбранный период
 CREATE OR REPLACE PROCEDURE ds.fill_account_balance_period(start_date DATE, end_date DATE)
 LANGUAGE plpgsql
 AS $$
@@ -249,9 +232,6 @@ BEGIN
 END;
 $$;
 
-
--- Проверяем
-CALL ds.fill_account_balance_period('2018-01-01', '2018-01-31');
 
 
 
