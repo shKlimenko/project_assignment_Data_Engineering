@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS logs.proc_log (
 	row_count INT
 );
 
--- Создание таблицы витрины данных
+-- Создание таблицы витрины данных оборотов по лицевым счетам
 CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_TURNOVER_F (
 	on_date DATE,
 	account_rk NUMERIC,
@@ -128,11 +128,31 @@ CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_TURNOVER_F (
 	debet_amount_rub NUMERIC(23, 8)
 );
 
--- Создание таблицы витрины остатков
+-- Создание таблицы витрины данных остатков по лицевым счетам
 CREATE TABLE IF NOT EXISTS DM.DM_ACCOUNT_BALANCE_F (
-	on_date DATE NOT NULL,
-	account_rk NUMERIC NOT NULL,
-	currency_rk NUMERIC,
-	balance_out FLOAT,
-	balance_out_rub FLOAT
+	on_date DATE,
+	account_rk NUMERIC,
+	balance_out NUMERIC(23, 8),
+	balance_out_rub NUMERIC(23, 8)
+);
+
+-- Создание таблицы витрины с данными по 101 форме
+CREATE TABLE IF NOT EXISTS DM.DM_F101_ROUND_F (
+	FROM_DATE DATE,
+	TO_DATE DATE,
+	CHAPTER CHAR(1),
+	LEDGER_ACCOUNT CHAR(5),
+	CHARACTERISTIC CHAR(1),
+	BALANCE_IN_RUB NUMERIC(23, 8),
+	BALANCE_IN_VAL NUMERIC(23, 8),
+	BALANCE_IN_TOTAL NUMERIC(23, 8),
+	TURN_DEB_RUB NUMERIC(23, 8),
+	TURN_DEB_VAL NUMERIC(23, 8),
+	TURN_DEB_TOTAL NUMERIC(23, 8),
+	TURN_CRE_RUB NUMERIC(23, 8),
+	TURN_CRE_VAL NUMERIC(23, 8),
+	TURN_CRE_TOTAL NUMERIC(23, 8),
+	BALANCE_OUT_RUB NUMERIC(23, 8),
+	BALANCE_OUT_VAL NUMERIC(23, 8),
+	BALANCE_OUT_TOTAL NUMERIC(23, 8)
 );
