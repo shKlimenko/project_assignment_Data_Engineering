@@ -187,7 +187,7 @@ BEGIN
         SELECT DISTINCT account_rk, char_type
         FROM ds.MD_ACCOUNT_D
         WHERE data_actual_date <= i_OnDate
-          AND (data_actual_end_date IS NULL OR data_actual_end_date > i_OnDate)
+          AND (data_actual_end_date IS NULL OR data_actual_end_date >= i_OnDate)
           AND char_type IN ('А', 'П')
     ) a
     LEFT JOIN (
