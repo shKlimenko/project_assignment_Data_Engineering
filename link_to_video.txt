@@ -1,3 +1,5 @@
 https://disk.yandex.ru/i/rayvvG_3CSMXvA  - task 1.1
 
 https://disk.yandex.ru/i/uCALVgxFgaeyyg  - task 1.2 /* после записи видео была обнаружена и исправлена ошибка невывода баланса за 2018-01-31 https://github.com/shKlimenko/project_assignment_Data_Engineering/commit/d8d8f6b96ab00fca001897f73e00655f5e522a1f */
+
+https://disk.yandex.ru/i/6BpaB8bI3LwulQ  - task 1.3

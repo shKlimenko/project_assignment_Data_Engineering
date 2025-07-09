@@ -263,3 +263,137 @@ CALL ds.fill_account_balance_period('2018-01-01', '2018-01-31');
 -- проверяем витрину остатков и логи
 SELECT * FROM DM.DM_ACCOUNT_BALANCE_F;
 SELECT * FROM LOGS.proc_log;
+
+
+
+
+-- Проектное задание 1.3
+-- процедура заполнения витрины с данными по 101 форме (с логгированием)
+CREATE OR REPLACE PROCEDURE dm.fill_f101_round_f(i_OnDate DATE)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_FromDate DATE;
+    v_ToDate DATE;
+    v_PrevDay DATE;
+	v_proc_name TEXT := 'dm.fill_f101_round_f';
+    v_start_time TIMESTAMP;
+    v_end_time   TIMESTAMP;
+    v_rows_affected INT := 0;
+BEGIN
+    v_start_time := clock_timestamp();
+
+    v_FromDate := DATE_TRUNC('month', i_OnDate) - INTERVAL '1 month';
+    v_ToDate := DATE_TRUNC('month', i_OnDate) - INTERVAL '1 day';
+    v_PrevDay := v_FromDate - INTERVAL '1 day'; 
+    
+    DELETE FROM DM.DM_F101_ROUND_F WHERE FROM_DATE = v_FromDate AND TO_DATE = v_ToDate;
+    
+    INSERT INTO DM.DM_F101_ROUND_F (
+        FROM_DATE, TO_DATE, CHAPTER, LEDGER_ACCOUNT, CHARACTERISTIC,
+        BALANCE_IN_RUB, BALANCE_IN_VAL, BALANCE_IN_TOTAL,
+        TURN_DEB_RUB, TURN_DEB_VAL, TURN_DEB_TOTAL,
+        TURN_CRE_RUB, TURN_CRE_VAL, TURN_CRE_TOTAL,
+        BALANCE_OUT_RUB, BALANCE_OUT_VAL, BALANCE_OUT_TOTAL
+    )
+    WITH 
+	accounts AS (
+        SELECT 
+			a.account_rk,
+			a.account_number,
+		    SUBSTRING(a.account_number, 1, 5) AS ledger_account,
+		    a.char_type AS characteristic,
+		    l.characteristic characteristic2,
+		    l.chapter AS chapter,
+		    a.currency_code AS currency_code
+		FROM DS.MD_ACCOUNT_D a
+		JOIN DS.MD_LEDGER_ACCOUNT_S l ON SUBSTRING(a.account_number, 1, 5) = l.ledger_account::TEXT
+		WHERE a.data_actual_date <= v_ToDate 
+		  AND (a.data_actual_end_date IS NULL OR a.data_actual_end_date >= v_FromDate)
+    ),
+	start_balances AS (
+        SELECT 
+            a.ledger_account,
+            a.characteristic,
+            a.chapter,
+            SUM(CASE WHEN a.currency_code IN ('643', '810') THEN b.balance_out_rub ELSE 0 END) AS balance_in_rub,
+            SUM(CASE WHEN a.currency_code NOT IN ('643', '810') THEN b.balance_out_rub ELSE 0 END) AS balance_in_val,
+            SUM(b.balance_out_rub) AS balance_in_total
+        FROM accounts a
+        JOIN DM.DM_ACCOUNT_BALANCE_F b ON a.account_rk = b.account_rk
+		WHERE b.on_date = v_PrevDay
+		GROUP BY a.ledger_account, a.characteristic, a.chapter
+    ),
+	end_balances AS (
+        SELECT 
+            a.ledger_account,
+            SUM(CASE WHEN a.currency_code IN ('643', '810') THEN b.balance_out_rub ELSE 0 END) AS balance_out_rub,
+            SUM(CASE WHEN a.currency_code NOT IN ('643', '810') THEN b.balance_out_rub ELSE 0 END) AS balance_out_val,
+            SUM(b.balance_out_rub) AS balance_out_total
+        FROM accounts a
+        JOIN DM.DM_ACCOUNT_BALANCE_F b ON a.account_rk = b.account_rk
+        WHERE b.on_date = v_ToDate
+        GROUP BY a.ledger_account
+    ),
+	turnovers AS (
+        SELECT 
+            a.ledger_account,
+            SUM(CASE WHEN a.currency_code IN ('643', '810') THEN t.debet_amount_rub ELSE 0 END) AS turn_deb_rub,
+            SUM(CASE WHEN a.currency_code NOT IN ('643', '810') THEN t.debet_amount_rub ELSE 0 END) AS turn_deb_val,
+            SUM(t.debet_amount_rub) AS turn_deb_total,
+            SUM(CASE WHEN a.currency_code IN ('643', '810') THEN t.credit_amount_rub ELSE 0 END) AS turn_cre_rub,
+            SUM(CASE WHEN a.currency_code NOT IN ('643', '810') THEN t.credit_amount_rub ELSE 0 END) AS turn_cre_val,
+            SUM(t.credit_amount_rub) AS turn_cre_total
+        FROM accounts a
+        JOIN DM.DM_ACCOUNT_TURNOVER_F t ON a.account_rk = t.account_rk 
+        WHERE t.on_date BETWEEN v_FromDate AND v_ToDate
+        GROUP BY a.ledger_account
+    )
+    SELECT 
+        v_FromDate,
+        v_ToDate,
+        s.chapter AS chapter,
+        s.ledger_account AS ledger_account,
+        s.characteristic AS characteristic,
+        s.balance_in_rub AS balance_in_rub,
+        s.balance_in_val AS balance_in_val,
+        s.balance_in_total AS balance_in_total,
+        COALESCE(t.turn_deb_rub, 0) AS turn_deb_rub,
+        COALESCE(t.turn_deb_val, 0) AS turn_deb_val,
+        COALESCE(t.turn_deb_total, 0) AS turn_deb_total,
+        COALESCE(t.turn_cre_rub, 0) AS turn_cre_rub,
+        COALESCE(t.turn_cre_val, 0) AS turn_cre_val,
+        COALESCE(t.turn_cre_total, 0) AS turn_cre_total,
+        COALESCE(e.balance_out_rub, 0) AS balance_out_rub,
+        COALESCE(e.balance_out_val, 0) AS balance_out_val,
+        COALESCE(e.balance_out_total, 0) AS balance_out_total
+    FROM start_balances s
+    FULL JOIN end_balances e ON s.ledger_account = e.ledger_account
+    FULL JOIN turnovers t ON s.ledger_account = t.ledger_account; 
+	
+    GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+
+    v_end_time := clock_timestamp();
+
+    IF v_rows_affected > 0 THEN
+        INSERT INTO logs.proc_log (proc_name, on_date, start_time, end_time, row_count)
+    VALUES (v_proc_name, i_OnDate, v_start_time, v_end_time, v_rows_affected);
+    ELSE
+        RAISE NOTICE 'Нет данных для даты %', i_OnDate;
+    END IF;    
+
+    COMMIT;
+END;
+$$;
+
+
+
+-- проверка
+SELECT * FROM DM.DM_F101_ROUND_F;
+SELECT * FROM logs.proc_log ORDER BY log_id DESC; 
+TRUNCATE TABLE dm.dm_f101_round_f;
+
+CALL dm.fill_f101_round_f('2018-02-01');
+
+SELECT * FROM logs.proc_log ORDER BY log_id DESC; 
+SELECT * FROM DM.DM_F101_ROUND_F;
