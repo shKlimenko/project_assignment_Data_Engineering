@@ -9,7 +9,7 @@ import psycopg2
 import time
 import os
 
-OUTPUT_FILE = 'data/dm_f101_round_f_export.csv'
+OUTPUT_FILE = 'data/dm_f101_round_f.csv'
 QUERY = "SELECT * FROM dm.dm_f101_round_f"
 
 def export_to_csv(conn, logs_conn):
@@ -38,7 +38,7 @@ def export_to_csv(conn, logs_conn):
                         if x != 0 else '0'
                     )
             
-            df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+            df.to_csv(OUTPUT_FILE, sep=';', index=False, encoding='utf-8')
 
     except Exception as e:
         conn.rollback()
