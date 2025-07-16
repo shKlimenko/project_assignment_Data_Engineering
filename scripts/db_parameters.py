@@ -18,3 +18,11 @@ LOGS_DB_PARAMS = {
     "host": os.getenv("LOGS_DB_HOST"),
     "port": os.getenv("LOGS_DB_PORT")
 }
+
+DB_PARAMS_LOC = {
+    "database": os.getenv("DB_NAME_LOC"),
+    "user": os.getenv("DB_USER_LOC"),
+    "password": os.getenv("DB_PASSWORD_LOC"),
+    "host": os.getenv("DB_HOST_LOC"),
+    "port": os.getenv("DB_PORT_LOC")
+}
