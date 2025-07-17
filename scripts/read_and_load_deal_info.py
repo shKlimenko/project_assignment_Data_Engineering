@@ -31,7 +31,7 @@ def load_data_from_csv(conn, logs_conn, csv_file):
         data = [tuple(x) for x in df.to_numpy()]
 
         insert_sql = """
-        INSERT INTO rd.deal_info_temp 
+        INSERT INTO rd.deal_info 
             (deal_rk, deal_num, deal_name, deal_sum, client_rk, account_rk, agreement_rk, 
             deal_start_date, department_rk, product_rk, deal_type_cd, effective_from_date, effective_to_date)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)

@@ -31,18 +31,18 @@ def load_data_from_csv(conn, logs_conn, csv_file):
         data = [tuple(x) for x in df.to_numpy()]
         
         truncate_sql = """
-        TRUNCATE TABLE rd.product_temp;
+        TRUNCATE TABLE rd.product;
         """
 
         insert_sql = """
-        INSERT INTO rd.product_temp 
+        INSERT INTO rd.product 
             (product_rk, product_name, effective_from_date, effective_to_date)
         VALUES (%s, %s, %s, %s)
         RETURNING (xmax = 0) AS inserted;
         """
         
         with conn.cursor() as cursor:
-            #cursor.execute(truncate_sql)
+            cursor.execute(truncate_sql)
             cursor.executemany(insert_sql, data)
         conn.commit()
         
